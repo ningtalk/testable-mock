@@ -41,11 +41,15 @@ public class TestClassHandler extends BaseClassHandler {
      */
     @Override
     protected void transform(ClassNode cn) {
+        // 检查是否已经被转换过（mock），依据类中是否存在属性名为_testableContextReference
+        // 如果没有则为类增加属性， private static MockContext _testableContextReference;
         if (wasTransformed(cn, REF_TESTABLE_CONTEXT, ClassUtil.toByteCodeClassName(CLASS_MOCK_CONTEXT))) {
             return;
         }
         for (MethodNode mn : cn.methods) {
+            // 测试类的构造方法
             if (mn.name.equals(ConstPool.CONSTRUCTOR)) {
+                // 在测试类构造函数里增加实例化_testableContextReference的指令
                 initMockContextReference(cn, mn);
             } else {
                 handleMockMethod(cn, mn);
@@ -66,7 +70,9 @@ public class TestClassHandler extends BaseClassHandler {
     }
 
     private void handleMockMethod(ClassNode cn, MethodNode mn) {
+        // 检查方法是否有被注解@MockMethod，@MockConstructor，@TestableMock修饰
         if (isMockMethod(mn)) {
+            // 将mock的方法转为public static,过程中会移除方法中的this引用，以及如果存在非静态的引用，输出日志提示
             toPublicStatic(cn, mn);
             injectInvokeRecorder(mn);
         }
@@ -162,6 +168,7 @@ public class TestClassHandler extends BaseClassHandler {
                 ClassUtil.toByteCodeClassName(CLASS_MOCK_CONTEXT)));
             il.add(new FieldInsnNode(GETFIELD, CLASS_MOCK_CONTEXT, FIELD_PARAMETERS, SIGNATURE_PARAMETERS));
         }
+        // 插入mock调用，删除真实的调用
         if (il.size() > 0) {
             mn.instructions.insert(instructions[pos], il);
             mn.instructions.remove(instructions[pos]);
@@ -171,6 +178,7 @@ public class TestClassHandler extends BaseClassHandler {
 
     private void injectInvokeRecorder(MethodNode mn) {
         InsnList il = new InsnList();
+        // 方法的参数组成的list
         List<Byte> types = ClassUtil.getParameterTypes(mn.desc);
         int size = types.size();
         int parameterOffset = 0;
